@@ -10,8 +10,7 @@ namespace Nancy.Cryptography
     public class AesEncryptionProvider : IEncryptionProvider
     {
         private readonly byte[] key;
-
-        private readonly byte[] iv;
+        private readonly IKeyGenerator keyGenerator;
 
         /// <summary>
         /// Creates a new instance of the AesEncryptionProvider class
@@ -19,8 +18,8 @@ namespace Nancy.Cryptography
         /// <param name="keyGenerator">Key generator to use to generate the key and iv</param>
         public AesEncryptionProvider(IKeyGenerator keyGenerator)
         {
+            this.keyGenerator = keyGenerator;
             this.key = keyGenerator.GetBytes(32);
-            this.iv = keyGenerator.GetBytes(16);
         }
 
         /// <summary>
@@ -30,11 +29,16 @@ namespace Nancy.Cryptography
         /// <returns>Encrypted string</returns>
         public string Encrypt(string data)
         {
+            var iv = this.keyGenerator.GetBytes(16);
             using (var provider = Aes.Create())
-            using (var encryptor = provider.CreateEncryptor(this.key, this.iv))
+            using (var encryptor = provider.CreateEncryptor(this.key, iv))
             {
                 var input = Encoding.UTF8.GetBytes(data);
-                var output = encryptor.TransformFinalBlock(input, 0, input.Length);
+                var cipherText = encryptor.TransformFinalBlock(input, 0, input.Length);
+
+                var output = new byte[iv.Length + cipherText.Length];
+                iv.CopyTo(output, 0);
+                cipherText.CopyTo(output, iv.Length);
 
                 return Convert.ToBase64String(output);
             }
@@ -49,11 +53,14 @@ namespace Nancy.Cryptography
         {
             try
             {
+                var input = Convert.FromBase64String(data);
+                var iv = new byte[16];
+                input.CopyTo(iv, 0);
+
                 using (var provider = Aes.Create())
-                using (var decryptor = provider.CreateDecryptor(this.key, this.iv))
+                using (var decryptor = provider.CreateDecryptor(this.key, iv))
                 {
-                    var input = Convert.FromBase64String(data);
-                    var output = decryptor.TransformFinalBlock(input, 0, input.Length);
+                    var output = decryptor.TransformFinalBlock(input, iv.Length, input.Length - iv.Length);
 
                     return Encoding.UTF8.GetString(output);
                 }

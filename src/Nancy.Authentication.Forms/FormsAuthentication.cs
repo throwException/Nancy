@@ -359,10 +359,15 @@ namespace Nancy.Authentication.Forms
             var newHmac = GenerateHmac(encryptedCookie, configuration);
             var hmacValid = HmacComparer.Compare(newHmac, hmacBytes, configuration.CryptographyConfiguration.HmacProvider.HmacLength);
 
-            var decrypted = encryptionProvider.Decrypt(encryptedCookie);
-
-            // Only return the decrypted result if the hmac was ok
-            return hmacValid ? decrypted : string.Empty;
+            if (hmacValid)
+            {
+                return encryptionProvider.Decrypt(encryptedCookie);
+            }
+            else
+            {
+                // Only return the decrypted result if the hmac was ok
+                return string.Empty;
+            }
         }
 
         /// <summary>
